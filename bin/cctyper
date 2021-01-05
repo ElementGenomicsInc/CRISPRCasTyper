@@ -91,10 +91,9 @@ criscas = CRISPRCas(repeatPred)
 criscas.crisprcas()
 
 ######### Plot ###########
-plotting = Map(criscas)
-plotting.plot()
+if not master.noplot:
+    plotting = Map(criscas)
+    plotting.plot()
 
 ######### Clean ###########
 master.clean()
-
-
