@@ -1,5 +1,7 @@
 import logging
 import re
+import os
+import itertools
 
 import pandas as pd
 
@@ -123,7 +125,8 @@ class CRISPRCas(object):
            
                 # CRISPRs near cas are trusted
                 crispr.loc[crispr['CRISPR'].isin(set([x for x in crispr_cas['CRISPRs'] for x in x])), 'Trusted'] = True
-                
+                crispr.to_csv(self.out+'crisprs_all.tab', sep='\t', index=False)
+
                 # Only trusted for the plot
                 self.crisprsall = crispr[crispr['Trusted']]
 
@@ -160,10 +163,10 @@ class CRISPRCas(object):
                         # If Cas False or Partial    
                         else:
                             if Best_Cas == Prediction_CRISPR:
-                                Prediction = Best_Cas+'(Partial)'
+                                Prediction = Best_Cas+'(Putative)'
                             # If overall type match
                             elif re.sub('-.*$', '', Best_Cas) == re.sub('-.*$', '', Prediction_CRISPR):
-                                Prediction = re.sub('-.*$', '', Prediction_CRISPR)+'(Partial)'
+                                Prediction = re.sub('-.*$', '', Prediction_CRISPR)+'(Putative)'
                             else:
                                 Prediction = "Unknown"
                                 
@@ -179,8 +182,8 @@ class CRISPRCas(object):
             if len(dicts) > 0:
 
                 # Split CRISPR-Cas in putative and good
-                crispr_cas_good = self.crispr_cas[~self.crispr_cas['Prediction'].str.contains('Unknown|Partial')]
-                crispr_cas_put = self.crispr_cas[self.crispr_cas['Prediction'].str.contains('Unknown|Partial')]
+                crispr_cas_good = self.crispr_cas[~self.crispr_cas['Prediction'].str.contains('Unknown|Putative')]
+                crispr_cas_put = self.crispr_cas[self.crispr_cas['Prediction'].str.contains('Unknown|Putative')]
 
                 if len(crispr_cas_good) > 0:
                     crispr_cas_good.to_csv(self.out+'CRISPR_Cas.tab', sep='\t', index=False)
@@ -208,3 +211,4 @@ class CRISPRCas(object):
                     crispr_put.to_csv(self.out+'crisprs_putative.tab', sep='\t', index=False)
                 if len(crispr) > 0:
                     crispr.to_csv(self.out+'crisprs_orphan.tab', sep='\t', index=False)
+

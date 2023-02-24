@@ -5,26 +5,31 @@
 
 Detect CRISPR-Cas genes and arrays, and predict the subtype based on both Cas genes and CRISPR repeat sequence.
 
-[CRISPRCasTyper and RepeatType are also available through a webserver](http://crisprcastyper.crispr.dk)
+[CRISPRCasTyper and RepeatType are also available through a webserver](https://crisprcastyper.crispr.dk)
 
 This software finds Cas genes with a large suite of HMMs, then groups these HMMs into operons, and predicts the subtype of the operons based on a scoring scheme.
-Furthermore, it finds CRISPR arrays with [minced](https://github.com/ctSkennerton/minced), and using a kmer-based machine learning approach (extreme gradient boosting trees) it predicts the subtype of the CRISPR arrays based on the consensus repeat. 
+Furthermore, it finds CRISPR arrays with [minced](https://github.com/ctSkennerton/minced) and by BLASTing a large suite of known repeats, and using a kmer-based machine learning approach (extreme gradient boosting trees) it predicts the subtype of the CRISPR arrays based on the consensus repeat. 
 It then connects the Cas operons and CRISPR arrays, producing as output:
 * CRISPR-Cas loci, with consensus subtype prediction based on both Cas genes (mostly) and CRISPR consensus repeats
 * Orphan Cas operons, and their predicted subtype
 * Orphan CRISPR arrays, and their predicted associated subtype
 
-#### It includes the following 44 subtypes/variants [(find typing scheme here)](https://typer.crispr.dk/#/typing):
-* I-A, I-B, I-C, I-D, I-E, I-F, I-F (transposon), I-G, II-A, II-B, II-C, III-A, III-B, III-C, III-D, III-E, III-F, IV-A1, IV-A2, IV-A3, IV-B, IV-C, IV-D, IV-E, V-A, V-B1, V-B2, V-C, V-D, V-E, V-F1, V-F2, V-F3, V-F (the rest), V-G, V-H, V-I, V-J, V-K, VI-A, VI-B1, VI-B2, VI-C, VI-D. 
+#### It includes the following 50 subtypes/variants [(find typing scheme here)](https://typer.crispr.dk/#/typing):
+* I-A, I-B, I-C, I-D, I-E, I-F, I-F (transposon), I-G, II-A, II-B, II-C, II-C2, II-D, III-A, III-B, III-C, III-D, III-E, III-F, IV-A1, IV-A2, IV-A3, IV-B, IV-C, IV-D, IV-E, V-A, V-B1, V-B2, V-C, V-D, V-E, V-F1, V-F2, V-F3, V-F (the rest), V-G, V-H, V-I, V-J, V-K, V-L, V-M, VI-A, VI-B1, VI-B2, VI-C, VI-D, VI-X, VI-Y. 
 
 * All subtypes from the most recent Nature Reviews Microbiology (Makarova et al. 2020): [Evolutionary classification of CRISPR–Cas systems: a burst of class 2 and derived variants](https://doi.org/10.1038/s41579-019-0299-x)
 * Updated type IV subtypes and variants based on: [Type IV CRISPR–Cas systems are highly diverse and involved in competition between plasmids](https://doi.org/10.1093/nar/gkz1197)
 * Type V-K: [RNA-guided DNA insertion with CRISPR-associated transposases](https://doi.org/10.1126/science.aax9181)
 * Transposon associated type I-F: [Transposon-encoded CRISPR–Cas systems direct RNA-guided DNA integration](https://doi.org/10.1038/s41586-019-1323-z)
 * New V-A variants: [Novel Type V-A CRISPR Effectors Are Active Nucleases with Expanded Targeting Capabilities](https://doi.org/10.1089/crispr.2020.0043)
+* New Cas13s: [Programmable RNA editing with compact CRISPR–Cas13 systems from uncultivated microbes](https://doi.org/10.1038/s41592-021-01124-4)
+* V-L (cas12l): [A new family of CRISPR-type V nucleases with C-rich PAM recognition](https://doi.org/10.15252/embr.202255481)
+* V-M (cas12m): [The miniature CRISPR-Cas12m effector binds DNA to block transcription](https://doi.org/10.1016/j.molcel.2022.11.003)
+* II-D and II-C2: [Compact Cas9d and HEARO enzymes for genome editing discovered from uncultivated microbes](https://doi.org/10.1038/s41467-022-35257-7)
 
 #### It can automatically draw gene maps of CRISPR-Cas systems and orphan Cas operons and CRISPR arrays
-<img src='img/plot.png' align="left" height="200" />
+##### in vector graphics format for direct use in scientific manuscripts
+<img src='img/plot.svg' align="left" height="200" />
 
 #### Citation
 [Jakob Russel, Rafael Pinilla-Redondo, David Mayo-Muñoz, Shiraz A. Shah, Søren J. Sørensen - CRISPRCasTyper: Automated Identification, Annotation and Classification of CRISPR-Cas loci. The CRISPR Journal Dec 2020](https://doi.org/10.1089/crispr.2020.0059)
@@ -85,7 +90,7 @@ mv Profiles/ data/
 rm data/Profiles.tar.gz
 
 # Tell CRISPRCasTyper where the data is:
-# either by setting an environment variable (has to done for each terminal session, or added to .bashrc):
+# either by setting an environment variable (has to be done for each terminal session, or added to .bashrc):
 export CCTYPER_DB="/path/to/data/"
 # or by using the --db argument each time you run CRISPRCasTyper:
 cctyper input.fa output --db /path/to/data/
@@ -104,7 +109,7 @@ conda activate cctyper
 cctyper genome.fa my_output
 ```
 
-#### If you have a complete circular genome
+#### If you have a complete circular genome (each entry in the fasta will be treated as having circular topology)
 ```sh
 cctyper genome.fa my_output --circular
 ```
@@ -145,9 +150,11 @@ cctyper -h
     * E-values: List of E-values for the genes
     * CoverageSeq: List of sequence coverages for the genes
     * CoverageHMM: List of HMM coverages for the genes
+    * Strand_Interference: Strand of interference module. 1 is positive strand, -1 is negative strand, 0 is mixed, NA if no interference gene found
+    * Strand_Adaptation: Strand of adaptation module. 1 is positive strand, -1 is negative strand, 0 is mixed, NA if no adaptation gene found
 * **crisprs_all.tab:**          All CRISPR arrays, also false positives
     * Contig: Sequence accession
-    * CRISPR: CRISPR ID (Sequence accession _ NUMBER)
+    * CRISPR: CRISPR ID (minced: Sequence accession _ NUMBER; repeatBLAST: Sequence accession - NUMBER _ NUMBER)
     * Start: Start of CRISPR
     * End: End of CRISPR
     * Consensus_repeat: Consensus repeat sequence
@@ -202,6 +209,8 @@ cctyper -h
 * **proteins.faa**              Protein sequences
 * **hmmer/*.tab**               Alignment output from HMMER for each Cas HMM
 * **minced.out:**               CRISPR array output from minced
+* **blast.tab:**                BLAST output from repeat alignment against flanking regions of cas operons
+* **Flank....:**                Fasta of flanking regions near cas operons and BLAST database of this  
 
 #### Notes on output
 Files are only created if there is any data. For example, the CRISPR_Cas.tab file is only created if there are any CRISPR-Cas loci. 
@@ -213,7 +222,7 @@ These maps can be expanded (`--expand N`) by adding unknown genes and genes with
 
 The plot below is run with `--expand 5000`
 
-* Arrays are in black, with their predicted subtype association based on the consensus repeat sequence.
+* Arrays are in alternating black/white displaying the actual number of repeats/spacers, and with their predicted subtype association based on the consensus repeat sequence.
 * The interference module is in yellow.
 * The adaptation module is in blue.
 * Cas6 is in red.
@@ -221,7 +230,7 @@ The plot below is run with `--expand 5000`
 * Genes with alignment scores below the thresholds are lighter and with parentheses around names.
 * Unknown genes are in gray (the number matches the genes.tab file)
 
-<img src='img/plot2.png' align="left" height="350" />
+<img src='img/plot2.svg' align="left" height="350" />
 
 ## RepeatTyper - How to <a name="repeattype"></a>
 With an input of CRISPR repeats (one per line, in a simple textfile) RepeatTyper will predict the subtype, based on the kmer composition of the repeat
@@ -244,37 +253,60 @@ The script prints:
 
 #### Notes on output
 * Predictions with probabilities below 0.75 are uncertain, and should be taken with a grain of salt.
-* The classifier was only trained on the subtypes for which there were enough (>20) repeats. It can therefore only predict subtypes of repeats associated with the following subtypes:
-    * I-A, I-B, I-C, I-D, I-E, I-F, I-G
+* Prior to version 1.4.0 the curated repeatTyper model was included in CCTyper
+* From version 1.4.0 and onwards updated repeatTyper models are included in CCTyper (see more information in the section below)
+* The followinig subtypes are included in the updated model as per December 2022:
+    * I-A, I-B, I-C, I-D, I-E, I-F, I-F (Transposon), I-G
     * II-A, II-B, II-C
-    * III-A, III-B, III-C, III-D
-    * IV-A1, IV-A2, IV-A3
-    * V-A
-    * VI-B
+    * III-A, III-B, III-C, III-D, III-E, III-F
+    * IV-A1, IV-A2, IV-A3, IV-D, IV-E
+    * V-A, V-B1, V-E, V-F1, V-F2, V-F3, V-F (the rest), V-G, V-I, V-J, V-K
+    * VI-A, VI-B1, VI-B2, VI-C, VI-D
 * This is the accuracy per subtype (on an unseen test dataset):
-    * **I-A**      0.60
-    * **I-B**      0.90
-    * **I-C**      0.98
-    * **I-D**      0.47
-    * **I-E**      1.00
-    * **I-F**      0.99
-    * **I-G**      0.83
-    * **II-A**     0.94
-    * **II-B**     1.00
-    * **II-C**     0.89
-    * **III-A**    0.89
-    * **III-B**    0.49
-    * **III-C**    0.60
-    * **III-D**    0.28
-    * **IV-A1**    0.79
-    * **IV-A2**    0.78
-    * **IV-A3**    0.98
-    * **V-A**      0.77
-    * **VI-B**     1.00
+* I-A      0.76
+* I-B      0.81
+* I-C      0.97
+* I-D      0.86
+* I-E      0.95
+* I-F      0.96
+* I-F_T    0.99
+* I-G      0.89
+* II-A     0.92
+* II-B     0.97
+* II-C     0.90
+* III-A    0.82
+* III-B    0.68
+* III-C    0.60
+* III-D    0.59
+* III-E    1.00
+* III-F    0.25
+* IV-A1    0.85
+* IV-A2    0.68
+* IV-A3    0.96
+* IV-D     0.85
+* IV-E     0.92
+* V-A      1.00
+* V-B1     0.90
+* V-E      0.30
+* V-F      0.87
+* V-F1     0.87
+* V-F2     0.90
+* V-F3     0.90
+* V-G      0.67
+* V-I      0.80
+* V-J      0.63
+* V-K      0.99
+* VI-A     0.96
+* VI-B1    0.96
+* VI-B2    1.00
+* VI-C     0.67
+* VI-D     0.97
 
 ### Updated RepeatTyper models <a name="repeatnew"></a>
 The [CCTyper webserver](https://typer.crispr.dk) is crowdsourcing subtyped repeats and includes an updated RepeatTyper model based on a much larger set of repeats and contains additional subtypes compared to the curated RepeatTyper model. 
 This updated model is automatically retrained each month and the models can be downloaded [here](http://mibi.galaxy.bio.ku.dk/russel/repeattyper/).
+
+From version 1.4.0 and onwards of CCTyper the newest repeatTyper model is included upon release of the version.
 
 Each model contains a training report (xgb_report), where you can find the training log, and in the bottom the accuracy, both overall and per subtype.
 
@@ -293,10 +325,6 @@ mv repeat_model/* ${CCTYPER_DB}/
 ##### CRISPRCasTyper and RepeatTyper will now use the new model for repeat prediction!
 
 ## RepeatTyper - Train <a name="repeattrain"></a>
-You can train the repeat classifier with your own set of subtyped repeats. With a tab-delimeted input where 1. column contains the subtypes and 2. column contains the CRISPR repeat sequences, RepeatTrain will train a CRISPR repeat classifier that is directly usable for both RepeatTyper and CRISPRCasTyper.
-
-#### Train
-```sh
 You can train the repeat classifier with your own set of subtyped repeats. With a tab-delimeted input where 1. column contains the subtypes and 2. column contains the CRISPR repeat sequences, RepeatTrain will train a CRISPR repeat classifier that is directly usable for both RepeatTyper and CRISPRCasTyper.
 
 #### Train

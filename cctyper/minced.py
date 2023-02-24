@@ -4,6 +4,7 @@ import logging
 import sys
 import re
 import math
+import random
 
 import statistics as st
 
@@ -13,34 +14,49 @@ from joblib import Parallel, delayed
 # Define the CRISPR class
 class CRISPR(object):
     count = 0
-    def __init__(self, sequence):
+    def __init__(self, sequence, exact_stats):
         self.sequence = sequence.rstrip()
         CRISPR.count += 1
         self.crispr = '{}_{}'.format(self.sequence, CRISPR.count)
         self.repeats = []
         self.spacers = []
+        self.exact = exact_stats
     def setPos(self, start, end):
-        self.start = start.rstrip()
-        self.end = end.rstrip()
+        self.start = int(start.rstrip())
+        self.end = int(end.rstrip())
     def addRepeat(self, repeat):
         self.repeats.append(repeat.rstrip())
     def addSpacer(self, spacer):
-        self.spacers.append(spacer.rstrip())
+        put_spacer = spacer.rstrip()
+        if len(put_spacer) > 0:
+            self.spacers.append(put_spacer)
     def getConsensus(self):
         self.cons = max(set(self.repeats), key = self.repeats.count) 
     def identity(self, i, j, sqlst):
         align = pairwise2.align.globalxx(sqlst[i], sqlst[j])
         return(align[0][2]/align[0][4]*100)
     def identLoop(self, seqs, threads):
-        sqr = range(len(seqs))
+        if self.exact:
+            sqr = range(len(seqs))
+        else:
+            if len(seqs) > 10:
+                n_samp = 10
+            else:
+                n_samp = len(seqs)
+            sqr = random.sample(range(len(seqs)), n_samp)
         idents = Parallel(n_jobs=threads)(delayed(self.identity)(k, l, seqs) for k in sqr for l in sqr if k > l)
         return(st.mean(idents))
     def stats(self, threads, rep_id, spa_id, spa_sem):
-        self.spacer_identity = round(self.identLoop(self.spacers, threads), 1)
+        if len(self.spacers) > 1:
+            self.spacer_identity = round(self.identLoop(self.spacers, threads), 1)
+            self.spacer_len = round(st.mean([len(x) for x in self.spacers]), 1)
+            self.spacer_sem = round(st.stdev([len(x) for x in self.spacers])/math.sqrt(len(self.spacers)), 1)
+        else:
+            self.spacer_identity = 0
+            self.spacer_len = len(self.spacers[0])
+            self.spacer_sem = 0
         self.repeat_identity = round(self.identLoop(self.repeats, threads), 1)
-        self.spacer_len = round(st.mean([len(x) for x in self.spacers]), 1)
         self.repeat_len = round(st.mean([len(x) for x in self.repeats]), 1)
-        self.spacer_sem = round(st.stdev([len(x) for x in self.spacers])/math.sqrt(len(self.spacers)), 1)
         self.trusted = (self.repeat_identity > rep_id) & (self.spacer_identity < spa_id) & (self.spacer_sem < spa_sem)
 
 class Minced(object):
@@ -56,7 +72,13 @@ class Minced(object):
             logging.info('Predicting CRISPR arrays with minced')
 
             # Run minced
-            subprocess.run(['minced', 
+            subprocess.run(['minced',
+                            '-searchWL', str(self.searchWL),
+                            '-minNR', str(self.minNR),
+                            '-minRL', str(self.minRL),
+                            '-maxRL', str(self.maxRL),
+                            '-minSL', str(self.minSL),
+                            '-maxSL', str(self.maxSL),
                             self.fasta, 
                             self.out+'minced.out'], 
                             stdout=subprocess.DEVNULL, 
@@ -72,6 +94,8 @@ class Minced(object):
     def parse_minced(self):
         file = open(self.out+'minced.out', 'r')
 
+        random.seed(self.seed)
+        
         crisprs = []
         for ll in file:
             # Record sequence accession
@@ -79,7 +103,7 @@ class Minced(object):
                 sequence_current = re.sub('\' \(.*', '', re.sub('Sequence \'', '', ll))
             # Create instance of CRISPR and add positions
             if ll.startswith('CRISPR'):
-                crisp_tmp = CRISPR(sequence_current)
+                crisp_tmp = CRISPR(sequence_current, self.exact_stats)
                 pos = re.sub('.*Range: ', '', ll)
                 start = re.sub(' - .*', '', pos)
                 end = re.sub('.* - ', '', pos)

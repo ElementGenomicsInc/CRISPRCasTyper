@@ -30,6 +30,7 @@ class XGBTrain(object):
         self.subsample = args.subsample
         self.colsample_bytree = args.colsample_bytree
         self.nfold = args.nfold
+        self.undersample = args.undersample
 
         # Alphabet
         base_for = "ACGT"
@@ -101,6 +102,10 @@ class XGBTrain(object):
 
         self.dat = self.dat[self.dat['Type'].isin(self.incl)]
 
+        if self.undersample > 0:
+            print('Undersampling to '+str(self.undersample)+' repeats for each subtype')
+            self.dat = self.dat.groupby('Type').apply(lambda x: x.sample(min(self.undersample,len(x)))).reset_index(drop=True)
+
     def count_kmer(self, seq):
         kmer_d = {}
         for i in range(len(seq) - self.kmer + 1):
@@ -131,6 +136,8 @@ class XGBTrain(object):
 
         X = pd.DataFrame([dict(zip(self.can_kmer, np.zeros(len(self.can_kmer))))] + [self.count_kmer(x) for x in self.dat['Seq']]).fillna(0)
         X = X.iloc[1:]
+        X['Length'] = [len(x) for x in self.dat['Seq']]
+        X['GC'] = [(x.count('G') + x.count('C'))/len(x) for x in self.dat['Seq']]
 
         y = [self.label_dict[x] for x in self.dat['Type']]
 
@@ -222,12 +229,23 @@ class XGBTrain(object):
         
     def test(self):
 
-        y_pred = self.model.predict(self.dtest, ntree_limit=self.boost_rounds)
+        y_pred = self.model.predict(self.dtest, iteration_range=(0, self.boost_rounds))
 
         conf = confusion_matrix(self.y_test, [x.argmax() for x in y_pred])
         conf_df = pd.DataFrame(conf, columns = self.incl, index = self.incl)
         conf_df.to_csv(self.out+'confusion_matrix.tab', sep='\t')
 
+        label_dict_rev = dict(zip(range(len(self.incl)), self.incl))
+
+        true_false_preds = [1 if x==y else 0 for x,y in zip(self.y_test, [x.argmax() for x in y_pred])]
+        probs = [x.max() for x in y_pred]
+
+        probs_df = pd.DataFrame(true_false_preds, columns = ['Correct'])
+        probs_df['Probability'] = probs
+        probs_df['Subtype_true'] = [label_dict_rev[y] for y in [x.argmax() for x in y_pred]]
+        probs_df['Subtype_pred'] = [label_dict_rev[y] for y in self.y_test]
+        probs_df.to_csv(self.out+'probability_test.tab', sep='\t', index=False)
+        
         type_acc = np.diag(conf_df) / conf_df.sum(axis=1)
 
         print('\033[92m' + 'Overall accuracy:' + '\033[0m')
@@ -238,4 +256,5 @@ class XGBTrain(object):
 
         print('\033[92m' + 'Adjusted accuracy:' + '\033[0m')
         print(type_acc.mean())
+
 

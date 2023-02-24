@@ -152,6 +152,31 @@ class Typer(object):
             compl_interf = compl_interf[0]
             compl_adapt = compl_adapt[0]
 
+        # Strand
+        interf_genes = list(chain.from_iterable(chain.from_iterable([v for k, v in self.compl_interf.items() if k in best_type_list])))
+        adapt_genes = list(chain.from_iterable(chain.from_iterable([v for k, v in self.compl_adapt.items() if k in best_type_list])))
+
+        tmp['Interf'] = tmp.apply(lambda x: any([i in x['Hmm'] for i in interf_genes]), axis=1)
+        tmp['Adapt'] = tmp.apply(lambda x: any([i in x['Hmm'] for i in adapt_genes]), axis=1)
+
+        interf_strands = set(tmp.loc[tmp['Interf'] == True, 'strand'])
+        adapt_strands = set(tmp.loc[tmp['Adapt'] == True, 'strand'])
+
+        if len(interf_strands) == 1:
+            interf_strand = interf_strands.pop()
+        elif len(interf_strands) == 0:
+            interf_strand = "NA"
+        else:
+            interf_strand = 0
+
+        if len(adapt_strands) == 1:
+            adapt_strand = adapt_strands.pop()
+        elif len(adapt_strands) == 0:
+            adapt_strand = "NA"
+        else:
+            adapt_strand = 0
+        
+        # Collect
         outdict = {"Contig": list(tmp['Acc'])[0],
                    "Operon": operon,
                    "Start": start_operon,
@@ -165,7 +190,9 @@ class Typer(object):
                        "Positions": list(tmp['Pos']),
                        "E-values": ['{:0.2e}'.format(x) for x in list(tmp['Eval'])],
                        "CoverageSeq": [round(x,3) for x in list(tmp['Cov_seq'])],
-                       "CoverageHMM": [round(x,3) for x in list(tmp['Cov_hmm'])]}
+                       "CoverageHMM": [round(x,3) for x in list(tmp['Cov_hmm'])],
+                       "Strand_Interference": interf_strand,
+                       "Strand_Adaptation": adapt_strand}
         
         return outdict
 
@@ -256,21 +283,20 @@ class Typer(object):
             if any(any_circ):
                 self.circ_operons = [sorted(i)[0] for (i, v) in zip([x[0] for x in list(operons)], any_circ) if v]
 
-            # Load score table
-            scores = pd.read_csv(self.scoring, sep=",")
-            scores.fillna(0, inplace=True)
-            self.cas_hmms = list(scores['Hmm'])
+            # Prepare score table
+            self.scores.fillna(0, inplace=True)
+            self.cas_hmms = list(self.scores['Hmm'])
             
             # Signature genes for single gene types
             self.signature = [re.sub('_.*','',x) for x in list(specifics)]
 
             # Get single effector types
-            single_effector_hmms = scores[scores['Hmm'].isin(list(specifics))].drop('Hmm', 1)
+            single_effector_hmms = self.scores[self.scores['Hmm'].isin(list(specifics))].drop('Hmm', axis=1)
             single_effector_hmms[single_effector_hmms < 0] = 0
             self.single_effector = list(single_effector_hmms.iloc[:, single_effector_hmms.sum(axis=0).values > 0].columns)
 
             # Merge the tables
-            self.hmm_df_all = pd.merge(self.hmm_df, scores, on="Hmm")
+            self.hmm_df_all = pd.merge(self.hmm_df, self.scores, on="Hmm")
 
             # Assign subtype for each operon
             operons_unq = set(self.hmm_df_all['operon'])
@@ -303,3 +329,42 @@ class Typer(object):
             if len(operons_put) > 0:    
                 operons_put.to_csv(self.out+'cas_operons_putative.tab', sep='\t', index=False)
             
+            if not self.skip_blast:
+                # Get positions of Cas
+                cas_positions = list(zip(self.preddf['Contig'], self.preddf['Start'], self.preddf['End']))
+              
+                self.flank_dict = {}
+                self.flank_dict_pos = {}
+
+                # For each contig
+                for acc in set([x[0] for x in cas_positions]):
+                    cas_pos = [(x[1], x[2]) for x in cas_positions if x[0] == acc]
+
+                    # Expand by chosen distance cutoff between CRISPR and cas
+                    cas_pos = [(x[0]-self.crispr_cas_dist, x[1]+self.crispr_cas_dist) for x in cas_pos] 
+                    cas_pos = [x if x[0]>0 else (1, x[1]) for x in cas_pos]
+
+                    # Check if any overlap, and merge if true
+                    if len(cas_pos) > 1:
+                        def recursive_merge(ll, start_index = 0):
+                            for i in range(start_index, len(ll) - 1):
+                                if ll[i][1] > ll[i+1][0]:
+                                    new_start = ll[i][0]
+                                    new_end = ll[i+1][1]
+                                    ll[i] = (new_start, new_end)
+                                    del ll[i+1]
+                                    return recursive_merge(ll.copy(), start_index=i)
+                            return ll
+
+                        cas_pos_sort = sorted(cas_pos)
+                        cas_pos = recursive_merge(cas_pos_sort.copy())
+
+                    n = 0
+                    for i in cas_pos:
+                        n += 1
+                        with open(self.out+'Flank.fna', 'a') as handle:
+                            handle.write('>'+acc+'-'+str(n)+'\n')
+                            handle.write(str(self.seq_dict[acc][(i[0]-1):i[1]])+'\n')
+                            self.flank_dict[acc+'-'+str(n)] = str(self.seq_dict[acc][(i[0]-1):i[1]])
+                            self.flank_dict_pos[acc+'-'+str(n)] = (i[0], i[1])
+                            
